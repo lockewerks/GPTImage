@@ -60,29 +60,6 @@ json grant_to_json(const RealmGrant& g) {
     return j;
 }
 
-// Collect every concrete (non-wildcard) realm a grant references.
-std::vector<std::string> referenced_realms(const RealmGrant& g) {
-    std::vector<std::string> all;
-    if (!g.home_realm.empty()) all.push_back(g.home_realm);
-    if (!g.read_all)  for (auto& r : g.read_realms)  all.push_back(r);
-    if (!g.write_all) for (auto& r : g.write_realms) all.push_back(r);
-    return all;
-}
-
-// Returns the first realm in `names` that does not exist in gptimage.realms,
-// or empty string if all exist.
-std::string first_unknown_realm(DbConn& db, const std::vector<std::string>& names) {
-    for (const auto& n : names) {
-        const char* sql = "SELECT 1 FROM gptimage.realms WHERE name = $1";
-        const char* params[] = { n.c_str() };
-        PGresult* r = PQexecParams(db.native(), sql, 1, nullptr, params, nullptr, nullptr, 0);
-        const bool exists = PQresultStatus(r) == PGRES_TUPLES_OK && PQntuples(r) == 1;
-        PQclear(r);
-        if (!exists) return n;
-    }
-    return {};
-}
-
 int cmd_add(const Config& cfg, const std::vector<std::string>& args) {
     std::string principal, home, read_csv, write_csv, max_sens, note;
     bool have_grant_flags = false;
@@ -123,12 +100,10 @@ int cmd_add(const Config& cfg, const std::vector<std::string>& args) {
         grant = *from_cfg;
     }
 
+    // No realm-existence check: GPTImage has no realms table. The grant's realm
+    // fields are carried for auth-layer compatibility but the image tools ignore
+    // them, so any principal template (typically read/write ["*"]) is valid.
     DbConn db(cfg.database);
-    if (auto bad = first_unknown_realm(db, referenced_realms(grant)); !bad.empty()) {
-        std::fprintf(stderr, "tokens add: realm '%s' does not exist in gptimage.realms\n",
-                     bad.c_str());
-        return 1;
-    }
 
     const std::string token = generate_token();
     const std::string hash  = sha256_hex(token);
