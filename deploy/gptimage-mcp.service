@@ -1,0 +1,48 @@
+# GPTImage MCP server (Streamable HTTP). Installed to
+# /etc/systemd/system/gptimage-mcp.service on the VPS. Runs as an unprivileged
+# system user; secrets come from /etc/gptimage/env (EnvironmentFile). The
+# binary is the atomic-flip symlink /opt/gptimage/current (see deploy_vps.sh).
+[Unit]
+Description=GPTImage MCP server (Streamable HTTP on 127.0.0.1:17718)
+After=network-online.target postgresql@18-main.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=gptimage
+Group=gptimage
+Environment=GPTIMAGE_CONFIG=/etc/gptimage/gptimage.toml
+EnvironmentFile=/etc/gptimage/env
+WorkingDirectory=/opt/gptimage/current
+ExecStart=/opt/gptimage/current/bin/gptimage_mcp --transport http
+Restart=on-failure
+RestartSec=2
+StandardOutput=journal
+StandardError=journal
+
+# Hardening — the server only needs a TCP socket and the Postgres connection.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/log/gptimage
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+CapabilityBoundingSet=
+RemoveIPC=yes
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

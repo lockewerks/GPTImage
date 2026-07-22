@@ -1,0 +1,45 @@
+# Append to the VPS Caddyfile. Matches the existing house style (JSON access
+# log with rotation, strict security headers, -Server). The global
+# `http_port 0` / `auto_https disable_redirects` mean certs are issued via
+# TLS-ALPN-01 on 443 and there is NO http->https redirect — clients must use
+# the explicit https:// URL.
+#
+# Only the MCP surface is proxied; everything else 404s. fail2ban watches this
+# log's 401 lines (see deploy/fail2ban/).
+
+gptimage.specterpoint.com {
+	log {
+		output file /var/log/caddy/gptimage.log {
+			roll_size 10mb
+			roll_keep 5
+			roll_keep_for 720h
+		}
+		format json
+	}
+
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+	}
+
+	# The OAuth surface is explicit, path by path: the authorize/token/register
+	# endpoints, the RFC 9728/8414 discovery documents (openid-configuration is
+	# an alias some clients probe first), and the JWKS. Everything else 404s.
+	@allowed path /mcp /mcp/* /healthz /oauth/authorize /oauth/token /oauth/register /.well-known/oauth-protected-resource* /.well-known/oauth-authorization-server* /.well-known/openid-configuration* /.well-known/jwks.json
+	handle @allowed {
+		reverse_proxy 127.0.0.1:17718 {
+			# Overwrite X-Forwarded-For with the address Caddy actually saw,
+			# discarding any client-supplied value. GPTImage's per-IP rate
+			# limits and audit trail read this header; without the overwrite a
+			# client could spoof it. Scoped to THIS site block only — it does
+			# not affect any other vhost in the shared Caddyfile.
+			header_up X-Forwarded-For {http.request.remote.host}
+		}
+	}
+	handle {
+		respond 404
+	}
+}

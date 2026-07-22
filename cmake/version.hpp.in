@@ -1,0 +1,9 @@
+#pragma once
+
+// Generated from cmake/version.hpp.in by CMake — do not edit by hand.
+// Bump the version at project(gptimage VERSION x.y.z) in the root CMakeLists.
+
+#define GPTIMAGE_VERSION       "@PROJECT_VERSION@"
+#define GPTIMAGE_VERSION_MAJOR @PROJECT_VERSION_MAJOR@
+#define GPTIMAGE_VERSION_MINOR @PROJECT_VERSION_MINOR@
+#define GPTIMAGE_VERSION_PATCH @PROJECT_VERSION_PATCH@

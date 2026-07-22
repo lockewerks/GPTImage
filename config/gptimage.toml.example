@@ -1,0 +1,88 @@
+# GPTImage runtime configuration. Copy to config/gptimage.toml and edit.
+# Secrets are never stored here: they are read from the environment variables
+# named below (password_env, api_key_env).
+
+[database]
+# Postgres holding ONLY the auth store (static tokens + the OAuth server's
+# clients/codes/refresh tokens/credentials). No image is ever stored here.
+# For stdio-only local use you still need a reachable DB for `migrate`, but the
+# generate/edit tools never touch it.
+host         = "127.0.0.1"
+port         = 5432
+dbname       = "gptimage"
+user         = "gptimage_rw"              # dedicated role, see sql/setup/create_role.sql
+password_env = "GPTIMAGE_DB_PASSWORD"
+schema       = "gptimage"
+sslmode      = ""                         # "" = libpq default (prefer). Set "require" on an untrusted network.
+
+[image]
+# The whole point of the server. gpt-image-2 is "ChatGPT Images 2.0".
+model               = "gpt-image-2"
+api_key_env         = "OPENAI_API_KEY"    # the key lives in the environment, not here
+generations_endpoint = "https://api.openai.com/v1/images/generations"
+edits_endpoint       = "https://api.openai.com/v1/images/edits"
+# Defaults applied when a tool call omits the field.
+default_size        = "1024x1024"         # WxH (÷16, aspect 1:3..3:1, up to 2K) or "auto"
+default_quality     = "high"              # auto | low | medium | high
+default_background  = "auto"              # transparent | opaque | auto (transparent not always honored)
+default_format      = "png"               # png | jpeg | webp
+moderation          = "low"               # auto | low (low is permissive but still filtered)
+max_n               = 4                   # hard cap on images per call (cost guard)
+timeout_s           = 180                 # high quality / 2K can be slow
+max_retries         = 4
+backoff_initial_ms  = 800
+
+[mcp]
+transport = "stdio"                       # "stdio" for desktop clients | "http" for the remote endpoint
+tcp_bind  = "127.0.0.1:17718"             # legacy stub
+# HTTP (Streamable HTTP). Binds loopback; Caddy terminates TLS in front and
+# proxies https://gptimage.specterpoint.com/mcp -> here.
+http_bind            = "127.0.0.1:17718"
+http_max_body_bytes  = 33554432           # 32 MiB: an inline image is large
+http_read_timeout_s  = 30
+http_write_timeout_s = 200
+
+[auth]
+# Only enforced for transport = "http". stdio trusts the OS boundary.
+enabled = true
+# Derived from [auth.oauth] issuer/resource when oauth is enabled; set
+# explicitly only to override.
+# resource_metadata_url = "https://gptimage.specterpoint.com/.well-known/oauth-protected-resource/mcp"
+
+# [auth.oauth] — the embedded OAuth 2.1 authorization server. This is what lets
+# claude.ai and ChatGPT add GPTImage as a remote connector: RFC 8414/9728
+# discovery, RFC 7591 dynamic client registration, PKCE authorization-code flow,
+# and a built-in login page backed by `gptimage_cli passwd`. VPS only; leave
+# disabled for local stdio use.
+# [auth.oauth]
+# enabled             = true
+# issuer              = "https://gptimage.specterpoint.com"      # no trailing slash
+# resource            = "https://gptimage.specterpoint.com/mcp"  # canonical resource (RFC 8707) = token audience
+# signing_key_path    = "/etc/gptimage/oauth_signing_key.pem"    # mint: gptimage_cli oauth keygen
+# previous_key_paths  = []            # rotated-out keys, kept in JWKS until their tokens age out
+# access_token_ttl_s  = 900           # 15 min; no revocation store, so keep short (refresh carries longevity)
+# auth_code_ttl_s     = 600
+# refresh_token_ttl_s = 2592000
+# redirect_hosts      = ["claude.ai", "claude.com", "chatgpt.com", "openai.com"]
+# max_clients         = 50
+#
+# Optional extra secret (env var, never a config key):
+#   GPTIMAGE_PASSWORD_PEPPER — if set, login passwords are HMAC'd with it before
+#   scrypt, so a stolen credentials table alone is uncrackable. Set it, then
+#   re-run `gptimage_cli passwd` for each principal to re-hash.
+
+# Principal template: the grant a freshly-minted token inherits
+# (gptimage_cli tokens add --principal <name>) and the grant a JWT subject maps
+# to once OAuth is enabled. Realm scoping is unused by the image tools, so a
+# single all-realms operator is all you need.
+[[auth.principals]]
+name         = "operator"
+home_realm   = "default"
+read_realms  = ["*"]
+write_realms = ["*"]
+
+[logging]
+level        = "info"
+path         = "/var/log/gptimage"        # rotating mcp.log written here for http transport
+rotate_mb    = 25
+retain_files = 10
