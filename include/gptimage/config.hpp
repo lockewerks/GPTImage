@@ -48,6 +48,14 @@ struct ImageConfig {
     int max_retries        = 4;    // on 429/5xx/network
     int backoff_initial_ms = 800;
 
+    // Async job pattern. Generate/edit start a background render and return
+    // fast; gptimage_result fetches it. Each generate/result call blocks up to
+    // job_poll_seconds (kept well under a remote connector's tool-call timeout)
+    // so a fast render returns in one call and a slow one is polled in chunks.
+    int job_poll_seconds     = 25;
+    int job_ttl_seconds      = 900;  // keep a finished image fetchable this long
+    int max_concurrent_jobs  = 4;
+
     // Resolved from environment at load time. Empty ⇒ the tools return an error
     // result instead of calling out.
     std::string api_key;

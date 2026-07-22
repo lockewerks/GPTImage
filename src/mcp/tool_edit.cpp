@@ -3,8 +3,10 @@
 #include <gptimage/image_client.hpp>
 #include <spdlog/spdlog.h>
 
+#include <chrono>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace gptimage {
@@ -58,24 +60,23 @@ json tool_edit(const json& args, ToolContext& ctx) {
     if (req.n < 1) req.n = 1;
     if (req.n > ic.max_n) req.n = ic.max_n;
 
-    try {
-        ImageClient client(ic);
-        const ImageResponse resp = client.edit(req, inputs, mask);
+    const size_t input_count = inputs.size();
+    const std::string id = ctx.jobs.submit(
+        "edit", ctx.grant.principal,
+        [ic, req, inputs = std::move(inputs), mask = std::move(mask)]() -> JobOutput {
+            ImageClient client(ic);
+            ImageResponse resp = client.edit(req, inputs, mask);
+            std::string caption = "Edited into " + std::to_string(resp.images.size()) +
+                (resp.images.size() == 1 ? " image" : " images") +
+                " with " + ic.model + ".";
+            return JobOutput{std::move(resp.images), std::move(caption)};
+        });
 
-        std::string caption = "Edited into " + std::to_string(resp.images.size()) +
-            (resp.images.size() == 1 ? " image" : " images") +
-            " with " + ic.model + " from " + std::to_string(inputs.size()) +
-            (inputs.size() == 1 ? " input." : " inputs.");
-        spdlog::info("gptimage_edit principal={} inputs={} out={} quality={}",
-                     ctx.grant.principal, inputs.size(), resp.images.size(), req.quality);
-        return image_result(resp.images, caption);
-    } catch (const ImageError& e) {
-        spdlog::warn("gptimage_edit failed: {}", e.what());
-        return text_result(std::string("image edit failed: ") + e.what(), true);
-    } catch (const std::exception& e) {
-        spdlog::error("gptimage_edit error: {}", e.what());
-        return text_result(std::string("image edit error: ") + e.what(), true);
-    }
+    spdlog::info("gptimage_edit job={} principal={} inputs={} quality={}",
+                 id, ctx.grant.principal, input_count, req.quality);
+
+    auto snap = ctx.jobs.wait_for(id, std::chrono::seconds(ic.job_poll_seconds));
+    return render_job(snap, id);
 }
 
 }  // namespace gptimage

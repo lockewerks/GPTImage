@@ -7,6 +7,7 @@
 # directly. The exe is just the entry point + transport selection.
 
 find_package(PostgreSQL REQUIRED)
+find_package(Threads REQUIRED)  # job_store.cpp uses std::thread (pthread on Linux)
 
 add_library(gptimage_mcp_lib STATIC
     server.cpp
@@ -18,6 +19,8 @@ add_library(gptimage_mcp_lib STATIC
     tool_common.cpp
     tool_generate.cpp
     tool_edit.cpp
+    tool_result.cpp
+    job_store.cpp
 )
 
 # PUBLIC include dir so test targets can #include "server.hpp" / "tool_common.hpp".
@@ -29,6 +32,7 @@ target_link_libraries(gptimage_mcp_lib
     PUBLIC
         gptimage_common
         PostgreSQL::PostgreSQL
+        Threads::Threads
     PRIVATE
         httplib::httplib
 )

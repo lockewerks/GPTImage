@@ -6,23 +6,30 @@
 #include <gptimage/image_client.hpp>
 #include <gptimage/realm.hpp>
 
+#include "job_store.hpp"
+
+#include <optional>
 #include <string>
 #include <vector>
 
 namespace gptimage {
 
-// Per-call context for MCP tool invocations. The image tools are stateless: they
-// need the config (for [image] settings + the resolved API key) and the caller's
-// grant (for the principal in log lines). No DB or embedder — generation talks
-// only to OpenAI.
+// Per-call context for MCP tool invocations. The image tools need the config
+// (for [image] settings + the resolved API key), the caller's grant (for the
+// principal in log lines), and the shared async job store (renders run on
+// background threads so no single tool call outlives a connector's timeout).
 struct ToolContext {
     const Config&     cfg;
     const RealmGrant& grant;
+    JobStore&         jobs;
 };
 
-// Per-tool entry points (one .cpp each).
+// Per-tool entry points (one .cpp each). generate/edit start a render and return
+// the image if it lands within the poll window, else a job_id; result fetches a
+// job_id.
 nlohmann::json tool_generate(const nlohmann::json& args, ToolContext& ctx);
 nlohmann::json tool_edit(const nlohmann::json& args, ToolContext& ctx);
+nlohmann::json tool_result(const nlohmann::json& args, ToolContext& ctx);
 
 // ---------------------------------------------------------------------------
 // Shared result helpers
@@ -40,5 +47,11 @@ nlohmann::json json_result(const nlohmann::json& data);
 // This is what puts the picture directly in the Claude conversation.
 nlohmann::json image_result(const std::vector<GeneratedImage>& images,
                             const std::string& caption);
+
+// Turn a job snapshot into an MCP result: Done -> inline image(s); Error -> an
+// error text result; Pending -> a machine-readable "still rendering, call
+// gptimage_result again" result; nullopt (unknown/expired id) -> an error.
+// Shared by generate, edit, and result so the three stay in lockstep.
+nlohmann::json render_job(const std::optional<ImageJob>& snap, const std::string& id);
 
 }  // namespace gptimage

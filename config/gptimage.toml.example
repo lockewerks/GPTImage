@@ -33,6 +33,14 @@ max_n               = 4                   # hard cap on images per call (cost gu
 timeout_s           = 180                 # high quality / 2K can be slow
 max_retries         = 4
 backoff_initial_ms  = 800
+# Async job pattern: gptimage_generate/gptimage_edit start a background render
+# and return fast; gptimage_result (read-only, so it never trips a write-approval
+# prompt) fetches it. Each generate/result call blocks up to job_poll_seconds,
+# kept under any remote connector's tool-call timeout, so a fast render lands in
+# one call and a slow one is polled in safe chunks.
+job_poll_seconds    = 25
+job_ttl_seconds     = 900                 # keep a finished image fetchable 15 min
+max_concurrent_jobs = 4
 
 [mcp]
 transport = "stdio"                       # "stdio" for desktop clients | "http" for the remote endpoint

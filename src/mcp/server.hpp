@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 
+#include "job_store.hpp"
 #include "oauth.hpp"
 
 namespace gptimage {
@@ -69,6 +70,7 @@ private:
                                        const std::string& message);
 
     Config                           cfg_;
+    JobStore                         jobs_;
     std::unique_ptr<DbConn>          db_;
     std::mutex                       exec_mtx_;
 

@@ -3,7 +3,9 @@
 #include <gptimage/image_client.hpp>
 #include <spdlog/spdlog.h>
 
+#include <chrono>
 #include <string>
+#include <utility>
 
 namespace gptimage {
 
@@ -32,26 +34,29 @@ json tool_generate(const json& args, ToolContext& ctx) {
     if (req.n < 1) req.n = 1;
     if (req.n > ic.max_n) req.n = ic.max_n;
 
-    try {
-        ImageClient client(ic);
-        const ImageResponse resp = client.generate(req);
+    // Start the render on a background thread. The lambda is fully self-contained
+    // (owns copies of the config and request), so it outlives this call safely.
+    const std::string id = ctx.jobs.submit(
+        "generate", ctx.grant.principal,
+        [ic, req]() -> JobOutput {
+            ImageClient client(ic);
+            ImageResponse resp = client.generate(req);
+            std::string caption = "Generated " + std::to_string(resp.images.size()) +
+                (resp.images.size() == 1 ? " image" : " images") +
+                " with " + ic.model + " (" + req.quality + ", " + req.size + ").";
+            if (resp.usage.total_tokens >= 0) {
+                caption += " Tokens: " + std::to_string(resp.usage.total_tokens) + ".";
+            }
+            return JobOutput{std::move(resp.images), std::move(caption)};
+        });
 
-        std::string caption = "Generated " + std::to_string(resp.images.size()) +
-            (resp.images.size() == 1 ? " image" : " images") +
-            " with " + ic.model + " (" + req.quality + ", " + req.size + ").";
-        if (resp.usage.total_tokens >= 0) {
-            caption += " Tokens: " + std::to_string(resp.usage.total_tokens) + ".";
-        }
-        spdlog::info("gptimage_generate principal={} n={} quality={} size={}",
-                     ctx.grant.principal, resp.images.size(), req.quality, req.size);
-        return image_result(resp.images, caption);
-    } catch (const ImageError& e) {
-        spdlog::warn("gptimage_generate failed: {}", e.what());
-        return text_result(std::string("image generation failed: ") + e.what(), true);
-    } catch (const std::exception& e) {
-        spdlog::error("gptimage_generate error: {}", e.what());
-        return text_result(std::string("image generation error: ") + e.what(), true);
-    }
+    spdlog::info("gptimage_generate job={} principal={} quality={} size={}",
+                 id, ctx.grant.principal, req.quality, req.size);
+
+    // Give a fast render (low quality / small size) the chance to land inside
+    // this one call; otherwise the caller polls gptimage_result with the id.
+    auto snap = ctx.jobs.wait_for(id, std::chrono::seconds(ic.job_poll_seconds));
+    return render_job(snap, id);
 }
 
 }  // namespace gptimage

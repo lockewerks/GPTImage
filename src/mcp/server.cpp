@@ -36,7 +36,9 @@ bool McpServer::is_supported_protocol(const std::string& version) {
     return false;
 }
 
-McpServer::McpServer(Config cfg) : cfg_(std::move(cfg)) {}
+McpServer::McpServer(Config cfg)
+    : cfg_(std::move(cfg)),
+      jobs_(cfg_.image.job_ttl_seconds, cfg_.image.max_concurrent_jobs) {}
 
 int McpServer::run_stdio() {
     // Block mixed stdio buffering and force per-line flush so responses land
@@ -133,7 +135,7 @@ json McpServer::handle_tools_call(const json& params, const RealmGrant& grant) {
     if (name.empty()) {
         throw std::runtime_error("tools/call: missing 'name'");
     }
-    ToolContext ctx{cfg_, grant};
+    ToolContext ctx{cfg_, grant, jobs_};
     return mcp_tool_call(name, arguments, ctx);
 }
 

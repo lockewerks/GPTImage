@@ -168,6 +168,9 @@ Config load_config(const std::filesystem::path& path) {
         cfg.image.timeout_s           = static_cast<int>(get_or<int64_t>(sec["timeout_s"],          cfg.image.timeout_s));
         cfg.image.max_retries         = static_cast<int>(get_or<int64_t>(sec["max_retries"],        cfg.image.max_retries));
         cfg.image.backoff_initial_ms  = static_cast<int>(get_or<int64_t>(sec["backoff_initial_ms"], cfg.image.backoff_initial_ms));
+        cfg.image.job_poll_seconds    = static_cast<int>(get_or<int64_t>(sec["job_poll_seconds"],    cfg.image.job_poll_seconds));
+        cfg.image.job_ttl_seconds     = static_cast<int>(get_or<int64_t>(sec["job_ttl_seconds"],     cfg.image.job_ttl_seconds));
+        cfg.image.max_concurrent_jobs = static_cast<int>(get_or<int64_t>(sec["max_concurrent_jobs"], cfg.image.max_concurrent_jobs));
     }
     // The key is resolved regardless of whether [image] was present, so the
     // ambient OPENAI_API_KEY works with a bare config.

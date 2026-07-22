@@ -44,11 +44,15 @@ json mcp_tool_schemas() {
             {"name", "gptimage_generate"},
             {"description",
                 "Generate an image from a text prompt with OpenAI gpt-image-2 "
-                "(\"ChatGPT Images 2.0\") and return it inline. Describe what you "
-                "want in plain language; the model handles composition, style, "
-                "and legible text. The image appears directly in the "
-                "conversation. Use quality:\"low\" for quick drafts and "
-                "quality:\"high\" for finished work."},
+                "(\"ChatGPT Images 2.0\"). Describe what you want in plain language; "
+                "the model handles composition, style, and legible text. A fast "
+                "render (the default low quality) returns the image inline right "
+                "here. A slower one (medium/high, or a large size) instead returns "
+                "a job_id with status \"pending\" — when that happens, call the "
+                "gptimage_result tool with that job_id to fetch the finished image, "
+                "and keep calling it until the image comes back. Use quality:\"low\" "
+                "for quick drafts and quality:\"high\" for finished work (high can "
+                "take 1-3 minutes and will come back via a job_id)."},
             {"inputSchema", {
                 {"type", "object"},
                 {"properties", {
@@ -80,10 +84,12 @@ json mcp_tool_schemas() {
             {"description",
                 "Edit or combine existing images with gpt-image-2. Pass one or "
                 "more input images as base64 strings plus a prompt describing the "
-                "change; the model returns a new image inline. With a mask "
-                "(base64 PNG whose transparent pixels mark the region to change) "
-                "it does targeted inpainting. Multiple inputs can be composited "
-                "into one scene. Use this to iterate on a previous result."},
+                "change. With a mask (base64 PNG whose transparent pixels mark the "
+                "region to change) it does targeted inpainting; multiple inputs can "
+                "be composited into one scene. Like gptimage_generate, a fast edit "
+                "returns the image inline, while a slower one returns a job_id with "
+                "status \"pending\" that you fetch with the gptimage_result tool. "
+                "Use this to iterate on a previous result."},
             {"inputSchema", {
                 {"type", "object"},
                 {"properties", {
@@ -110,12 +116,37 @@ json mcp_tool_schemas() {
                 {"openWorldHint", true},
             }},
         },
+        {
+            {"name", "gptimage_result"},
+            {"description",
+                "Fetch an image that gptimage_generate or gptimage_edit started but "
+                "did not return inline (they handed back a job_id with status "
+                "\"pending\"). Pass that job_id here. If the render is finished the "
+                "image is returned inline; if it is still working this reports "
+                "\"pending\" again, in which case call gptimage_result once more with "
+                "the same job_id. High-quality renders take 1-3 minutes, so several "
+                "polls are normal. This is the only way to retrieve a slow render."},
+            {"inputSchema", {
+                {"type", "object"},
+                {"properties", {
+                    {"job_id", {{"type", "string"},
+                                {"description", "The job_id returned by gptimage_generate or gptimage_edit."}}},
+                }},
+                {"required", json::array({"job_id"})},
+            }},
+            {"annotations", {
+                {"title", "Get Image Result"},
+                {"readOnlyHint", true},   // just fetches; never starts new work
+                {"openWorldHint", false},
+            }},
+        },
     });
 }
 
 json mcp_tool_call(const std::string& name, const json& arguments, ToolContext& ctx) {
     if (name == "gptimage_generate") return tool_generate(arguments, ctx);
     if (name == "gptimage_edit")     return tool_edit(arguments, ctx);
+    if (name == "gptimage_result")   return tool_result(arguments, ctx);
     return text_result("unknown tool: '" + name + "'", /*is_error=*/true);
 }
 
