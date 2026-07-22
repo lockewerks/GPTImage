@@ -20,10 +20,13 @@ json mcp_tool_schemas() {
             "(portrait). Defaults to the server setting."},
     };
     const json quality_prop = {
-        {"type", "string"}, {"enum", quality_enum}, {"default", "high"},
+        {"type", "string"}, {"enum", quality_enum}, {"default", "low"},
         {"description",
-            "Rendering quality. Higher costs more and is slower: low is a cheap "
-            "draft, high is final art. \"auto\" lets the model decide."},
+            "Rendering quality vs speed. Prefer \"low\" for interactive requests: "
+            "it is fast (~15-30s) and cheap. \"medium\" is a balance. \"high\" is "
+            "best but slow (~2 minutes for large sizes) and can exceed a remote "
+            "connector's tool-call timeout, so only use it when the user explicitly "
+            "asks for final/high quality and can wait. \"auto\" lets the model decide."},
     };
     const json format_prop = {
         {"type", "string"}, {"enum", format_enum}, {"default", "png"},
