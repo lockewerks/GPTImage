@@ -3,7 +3,7 @@
 # running MCP server to the new binaries, with a health-gated auto-rollback.
 #
 # Layout (created by the systemd/provisioning step):
-#   /opt/gptimage/src         git checkout (deploy key: github.com-gptimage)
+#   /opt/gptimage/src         git checkout (public repo, anonymous HTTPS clone)
 #   /opt/gptimage/releases/<sha>/bin   built gptimage_mcp + gptimage_cli
 #   /opt/gptimage/current     symlink -> releases/<sha>   (ExecStart points here)
 #   /etc/gptimage/gptimage.toml        config (transport="http")
@@ -13,7 +13,7 @@
 # Run as root; the build + migrate run as the unprivileged `gptimage` user.
 
 REF="${1:-origin/main}"
-REPO="git@github.com-gptimage:lockewerks/GPTImage.git"
+REPO="https://github.com/lockewerks/GPTImage.git"
 SRC=/opt/gptimage/src
 REL=/opt/gptimage/releases
 CONFIG=/etc/gptimage/gptimage.toml
