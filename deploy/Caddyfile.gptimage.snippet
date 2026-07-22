@@ -8,6 +8,12 @@
 # log's 401 lines (see deploy/fail2ban/).
 
 gptimage.specterpoint.com {
+	# Accept the MCP endpoint case-insensitively. Some clients register the
+	# connector URL with an uppercase path (/MCP); rewrite to the canonical
+	# lowercase /mcp before routing so the exact-path matcher below still hits.
+	@upper path /MCP /MCP/*
+	rewrite @upper /mcp
+
 	log {
 		output file /var/log/caddy/gptimage.log {
 			roll_size 10mb
