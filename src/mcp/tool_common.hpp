@@ -52,6 +52,12 @@ nlohmann::json image_result(const std::vector<GeneratedImage>& images,
 // error text result; Pending -> a machine-readable "still rendering, call
 // gptimage_result again" result; nullopt (unknown/expired id) -> an error.
 // Shared by generate, edit, and result so the three stay in lockstep.
-nlohmann::json render_job(const std::optional<ImageJob>& snap, const std::string& id);
+//
+// When public_base_url is non-empty a Done result also carries a text block with
+// a markdown image link (<base>/i/<job_id>-<index>.<ext>) telling the client to
+// render the picture in the conversation body, not just inside the collapsed
+// tool-call block. Empty ⇒ inline base64 only.
+nlohmann::json render_job(const std::optional<ImageJob>& snap, const std::string& id,
+                          const std::string& public_base_url);
 
 }  // namespace gptimage

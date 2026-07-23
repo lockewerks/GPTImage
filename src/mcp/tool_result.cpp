@@ -19,7 +19,7 @@ json tool_result(const json& args, ToolContext& ctx) {
     }
     auto snap = ctx.jobs.wait_for(
         id, std::chrono::seconds(ctx.cfg.image.job_poll_seconds));
-    return render_job(snap, id);
+    return render_job(snap, id, ctx.cfg.image.public_base_url);
 }
 
 }  // namespace gptimage

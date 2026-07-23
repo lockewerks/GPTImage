@@ -52,12 +52,16 @@ user = "tester"
     CHECK(cfg.database.dbname == "test");
     CHECK(cfg.database.user   == "tester");
     CHECK(cfg.database.schema == "gptimage");
-    // Defaults for the image backend.
+    // Defaults for the image backend. low quality + webp keep an interactive
+    // render fast and its inline payload light enough to render in the chat.
     CHECK(cfg.image.model           == "gpt-image-2");
     CHECK(cfg.image.default_size     == "1024x1024");
-    CHECK(cfg.image.default_quality  == "high");
-    CHECK(cfg.image.default_format   == "png");
+    CHECK(cfg.image.default_quality  == "low");
+    CHECK(cfg.image.default_format   == "webp");
+    CHECK(cfg.image.default_compression == 80);
     CHECK(cfg.image.max_n            == 4);
+    // Nothing is hosted unless a base URL is configured or derived from OAuth.
+    CHECK(cfg.image.public_base_url.empty());
     CHECK(cfg.mcp.transport == "stdio");
 }
 
@@ -95,9 +99,11 @@ user = "tester"
 [image]
 model            = "gpt-image-99"
 api_key_env      = "GPTIMAGE_TEST_OAI_KEY"
+public_base_url  = "https://img.example.com/"
 default_size     = "1536x1024"
 default_quality  = "low"
 default_format   = "webp"
+default_compression = 55
 moderation       = "auto"
 max_n            = 2
 timeout_s        = 42
@@ -107,11 +113,32 @@ timeout_s        = 42
     CHECK(cfg.image.default_size    == "1536x1024");
     CHECK(cfg.image.default_quality == "low");
     CHECK(cfg.image.default_format  == "webp");
+    CHECK(cfg.image.default_compression == 55);
     CHECK(cfg.image.moderation      == "auto");
     CHECK(cfg.image.max_n           == 2);
     CHECK(cfg.image.timeout_s       == 42);
+    // An explicit base URL wins and has any trailing slash normalized off.
+    CHECK(cfg.image.public_base_url == "https://img.example.com");
     // The key is resolved from the named env var, never stored in the TOML.
     CHECK(cfg.image.api_key == "sk-test-123");
+}
+
+TEST_CASE("public_base_url derives from the OAuth issuer when unset") {
+    auto p = write_temp_toml("hosting_derives", R"(
+[database]
+dbname = "test"
+user = "tester"
+
+[auth.oauth]
+enabled          = true
+issuer           = "https://gptimage.example.com"
+resource         = "https://gptimage.example.com/mcp"
+signing_key_path = "/tmp/does-not-need-to-exist.pem"
+)");
+    auto cfg = gptimage::load_config(p);
+    // No [image].public_base_url set, so it inherits the OAuth origin and the
+    // hosted-image route shares the domain the connector already trusts.
+    CHECK(cfg.image.public_base_url == "https://gptimage.example.com");
 }
 
 TEST_CASE("api key resolves from default env even without an [image] section") {

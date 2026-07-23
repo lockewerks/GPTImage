@@ -33,8 +33,11 @@ gptimage.specterpoint.com {
 
 	# The OAuth surface is explicit, path by path: the authorize/token/register
 	# endpoints, the RFC 9728/8414 discovery documents (openid-configuration is
-	# an alias some clients probe first), and the JWKS. Everything else 404s.
-	@allowed path /mcp /mcp/* /healthz /oauth/authorize /oauth/token /oauth/register /.well-known/oauth-protected-resource* /.well-known/oauth-authorization-server* /.well-known/openid-configuration* /.well-known/jwks.json
+	# an alias some clients probe first), and the JWKS. /i/* serves finished
+	# renders so the picture shows inline in the chat body (unauthenticated by
+	# design: claude.ai's image proxy fetches it with no token, and the 96-bit
+	# random job id is the capability). Everything else 404s.
+	@allowed path /mcp /mcp/* /i/* /healthz /oauth/authorize /oauth/token /oauth/register /.well-known/oauth-protected-resource* /.well-known/oauth-authorization-server* /.well-known/openid-configuration* /.well-known/jwks.json
 	handle @allowed {
 		reverse_proxy 127.0.0.1:17718 {
 			# Overwrite X-Forwarded-For with the address Caddy actually saw,

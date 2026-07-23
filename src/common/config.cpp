@@ -159,10 +159,12 @@ Config load_config(const std::filesystem::path& path) {
         cfg.image.api_key_env         = get_or<std::string>(sec["api_key_env"],         cfg.image.api_key_env);
         cfg.image.generations_endpoint= get_or<std::string>(sec["generations_endpoint"],cfg.image.generations_endpoint);
         cfg.image.edits_endpoint      = get_or<std::string>(sec["edits_endpoint"],      cfg.image.edits_endpoint);
+        cfg.image.public_base_url     = get_or<std::string>(sec["public_base_url"],     cfg.image.public_base_url);
         cfg.image.default_size        = get_or<std::string>(sec["default_size"],        cfg.image.default_size);
         cfg.image.default_quality     = get_or<std::string>(sec["default_quality"],     cfg.image.default_quality);
         cfg.image.default_background  = get_or<std::string>(sec["default_background"],  cfg.image.default_background);
         cfg.image.default_format      = get_or<std::string>(sec["default_format"],      cfg.image.default_format);
+        cfg.image.default_compression = static_cast<int>(get_or<int64_t>(sec["default_compression"], cfg.image.default_compression));
         cfg.image.moderation          = get_or<std::string>(sec["moderation"],          cfg.image.moderation);
         cfg.image.max_n               = static_cast<int>(get_or<int64_t>(sec["max_n"],              cfg.image.max_n));
         cfg.image.timeout_s           = static_cast<int>(get_or<int64_t>(sec["timeout_s"],          cfg.image.timeout_s));
@@ -280,6 +282,17 @@ Config load_config(const std::filesystem::path& path) {
                 "config: auth.jwt_audience is required when a JWT issuer is set "
                 "(prevents cross-audience token replay)");
         }
+    }
+
+    // Image hosting shares the HTTP origin the OAuth server already advertises,
+    // so a remote deployment gets inline-in-body rendering with no extra config;
+    // an explicit image.public_base_url still wins. Normalize away a trailing
+    // slash so URL building can assume there is none.
+    if (cfg.image.public_base_url.empty() && cfg.auth.oauth.enabled) {
+        cfg.image.public_base_url = cfg.auth.oauth.issuer;
+    }
+    while (!cfg.image.public_base_url.empty() && cfg.image.public_base_url.back() == '/') {
+        cfg.image.public_base_url.pop_back();
     }
 
     // ----- [logging] -----

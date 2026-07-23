@@ -188,6 +188,9 @@ ImageResponse ImageClient::edit(const ImageRequest& req,
     if (!req.size.empty())        mp.parts.emplace_back("size", req.size);
     if (!req.quality.empty())     mp.parts.emplace_back("quality", req.quality);
     if (!req.format.empty())      mp.parts.emplace_back("output_format", req.format);
+    if (req.compression >= 0 && (req.format == "jpeg" || req.format == "webp")) {
+        mp.parts.emplace_back("output_compression", std::to_string(req.compression));
+    }
     if (!cfg_.moderation.empty()) mp.parts.emplace_back("moderation", cfg_.moderation);
     for (size_t i = 0; i < images.size(); ++i) {
         mp.parts.emplace_back(cpr::Part(

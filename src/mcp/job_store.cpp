@@ -104,6 +104,7 @@ std::string JobStore::submit(const std::string& kind, const std::string& princip
 std::optional<ImageJob> JobStore::wait_for(const std::string& id,
                                            std::chrono::milliseconds wait) {
     std::unique_lock<std::mutex> lk(mtx_);
+    evict_locked();
     auto it = jobs_.find(id);
     if (it == jobs_.end()) return std::nullopt;
     auto job = it->second;  // shared_ptr keeps it alive across the wait
@@ -111,6 +112,18 @@ std::optional<ImageJob> JobStore::wait_for(const std::string& id,
         cv_.wait_for(lk, wait, [&] { return job->status != ImageJob::Status::Pending; });
     }
     return *job;  // snapshot copy
+}
+
+std::optional<GeneratedImage> JobStore::get_image(const std::string& id, size_t index) {
+    std::lock_guard<std::mutex> lk(mtx_);
+    evict_locked();
+    auto it = jobs_.find(id);
+    if (it == jobs_.end()) return std::nullopt;
+    const auto& job = *it->second;
+    if (job.status != ImageJob::Status::Done || index >= job.images.size()) {
+        return std::nullopt;
+    }
+    return job.images[index];  // copy of {b64, mime}
 }
 
 }  // namespace gptimage

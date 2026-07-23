@@ -15,7 +15,8 @@ Lovecraftian horror nearly as often as its ancestors did.
 
 ## What it actually does
 
-Two tools. That is it. Scope creep is how projects die in a ditch.
+Two tools do the work, plus a third that just fetches a slow render. Scope
+creep is how projects die in a ditch.
 
 - **`gptimage_generate`** — text goes in, image comes out. Set `quality` to
   `low` when you are just spitballing and `high` when it is going in the deck.
@@ -23,9 +24,16 @@ Two tools. That is it. Scope creep is how projects die in a ditch.
 - **`gptimage_edit`** — hand it one or more images plus a prompt and it edits or
   mashes them together. Pass a `mask` for surgical inpainting instead of
   "regenerate the whole damn thing and hope."
+- **`gptimage_result`**: a `high`-quality render can take a couple minutes,
+  longer than a connector will sit and wait, so the other two hand back a
+  `job_id` and this fetches the finished image once it is ready.
 
-Images come back as MCP image blocks, so they render right there in the
-conversation instead of vomiting a wall of base64 into your lap.
+Images come back as webp, a few dozen KB instead of a multi-megabyte PNG that a
+remote connector quietly drops on the floor. Over that connector the server
+also hosts each render for a few minutes and hands Claude a link to it, so the
+picture lands inline in the conversation body instead of collapsed inside a
+tool-call widget you have to expand. Locally over stdio there is nothing to
+host, so the image rides back inline as base64 and the client renders it.
 
 ## The part you will ignore until it bites you
 
@@ -38,10 +46,12 @@ only cap on quality and frequency is your own self-control. Godspeed.
 ## The stuff you need
 
 - A C++20 compiler (MSVC 2022, or gcc-13 / clang-17) and CMake 3.25+.
-- PostgreSQL 16+. Yes, an image server wants a database, and no, it does not
-  store a single one of your images. The Postgres schema holds only the auth
-  plumbing: static bearer tokens and the OAuth server's clients, codes, and
-  refresh tokens. Everything you generate is ephemeral. Breathe.
+- PostgreSQL 16+. Yes, an image server wants a database, and no, it never writes
+  an image to it. The Postgres schema holds only the auth plumbing: static bearer
+  tokens and the OAuth server's clients, codes, and refresh tokens. A finished
+  render lives in memory only long enough for Claude to fetch its link, a few
+  minutes set by `job_ttl_seconds`, served from an unguessable per-render URL and
+  then dropped. Nothing you generate touches the disk. Breathe.
 - An OpenAI API key with image access, in the `OPENAI_API_KEY` environment
   variable. It never goes in a config file. If you paste your key into a TOML
   and commit it, that is a you problem.
@@ -124,7 +134,7 @@ Everything you need is in `deploy/` and `scripts/`:
 
 - `deploy/gptimage-mcp.service` — hardened systemd unit, binds `127.0.0.1:17718`.
 - `deploy/Caddyfile.gptimage.snippet` — Caddy site block, terminates TLS, proxies
-  only the MCP + OAuth paths, 404s everything else.
+  the MCP and OAuth paths plus `/i/*` (the hosted-render route), 404s the rest.
 - `deploy/fail2ban/` — jails that ban whoever brute-forces your login or spams
   the DCR endpoint.
 - `scripts/deploy_vps.sh` — pulls from git, builds, runs migrations, atomically
@@ -147,9 +157,13 @@ and `OPENAI_API_KEY`. Not in the TOML. We have been over this.
 ## Configure the knobs
 
 All of it lives in `config/gptimage.toml` (see the `.example`). The `[image]`
-section is the interesting bit: default size, default quality, output format,
-the model id (bump it when OpenAI ships the next one and change nothing else),
-and `max_n` to keep runaway agents from setting your credit card on fire.
+section is the interesting bit: default size, default quality, output format
+(`webp` by default, so a render stays light enough to display inline) and its
+compression level, the model id (bump it when OpenAI ships the next one and
+change nothing else), and `max_n` to keep runaway agents from setting your
+credit card on fire. `public_base_url` is the origin renders are served from;
+leave it blank and it inherits your OAuth issuer, so the remote deploy needs no
+extra wiring.
 
 ## Test
 

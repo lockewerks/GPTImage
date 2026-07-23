@@ -57,6 +57,7 @@ json tool_edit(const json& args, ToolContext& ctx) {
     req.quality = args.value("quality", ic.default_quality);
     req.format  = args.value("format",  ic.default_format);
     req.n       = args.value("n",        1);
+    req.compression = args.value("compression", ic.default_compression);
     if (req.n < 1) req.n = 1;
     if (req.n > ic.max_n) req.n = ic.max_n;
 
@@ -76,7 +77,7 @@ json tool_edit(const json& args, ToolContext& ctx) {
                  id, ctx.grant.principal, input_count, req.quality);
 
     auto snap = ctx.jobs.wait_for(id, std::chrono::seconds(ic.job_poll_seconds));
-    return render_job(snap, id);
+    return render_job(snap, id, ic.public_base_url);
 }
 
 }  // namespace gptimage

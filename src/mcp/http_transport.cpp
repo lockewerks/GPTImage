@@ -13,6 +13,7 @@
 #include "server.hpp"
 #include "auth.hpp"
 
+#include <gptimage/image_client.hpp>
 #include <gptimage/realm.hpp>
 
 #include <httplib.h>
@@ -211,6 +212,43 @@ int McpServer::run_http() {
     };
     svr.Get("/mcp", method_not_allowed);
     svr.Delete("/mcp", method_not_allowed);
+
+    // ---- GET /i/<job_id>-<index>.<ext>: hosted render, unauthenticated ------
+    // Lets the client render a generated image inline in the conversation body
+    // (via the markdown link the tools return) instead of only inside the
+    // collapsed tool-call block. Deliberately auth-free: claude.ai's image proxy
+    // fetches this with no bearer token, so the 96-bit random job id is the
+    // capability. It only ever serves an image the same caller's generate/edit
+    // just produced, and the render is evicted from the in-memory cache minutes
+    // after it completes (job_ttl_seconds) — nothing is persisted. Serves from
+    // the JobStore's own lock, so it is not serialized behind exec_mtx_.
+    svr.Get(R"(/i/(job_[0-9a-f]+)-(\d+)\.(?:png|jpe?g|webp))",
+            [this](const httplib::Request& req, httplib::Response& res) {
+        const std::string id = req.matches[1].str();
+        size_t index = 0;
+        try {
+            index = static_cast<size_t>(std::stoul(req.matches[2].str()));
+        } catch (const std::exception&) {
+            res.status = 404;
+            return;
+        }
+        auto img = jobs_.get_image(id, index);
+        if (!img) {
+            res.status = 404;
+            res.set_content("image not found (expired, already released, or never existed)",
+                            "text/plain");
+            return;
+        }
+        const std::vector<unsigned char> bytes = base64_decode(img->b64);
+        if (bytes.empty()) {
+            res.status = 500;
+            res.set_content("image decode error", "text/plain");
+            return;
+        }
+        res.set_header("Cache-Control", "private, max-age=300");
+        res.set_content(reinterpret_cast<const char*>(bytes.data()), bytes.size(), img->mime);
+        spdlog::info("http: GET /i {}-{} {} bytes ({})", id, index, bytes.size(), img->mime);
+    });
 
     // ---- GET /healthz: unauthenticated liveness -----------------------------
     svr.Get("/healthz", [this](const httplib::Request&, httplib::Response& res) {

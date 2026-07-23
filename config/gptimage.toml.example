@@ -21,13 +21,25 @@ model               = "gpt-image-2"
 api_key_env         = "OPENAI_API_KEY"    # the key lives in the environment, not here
 generations_endpoint = "https://api.openai.com/v1/images/generations"
 edits_endpoint       = "https://api.openai.com/v1/images/edits"
+# Public origin this server is reachable at (no trailing slash). When set, a
+# finished render is also served at <public_base_url>/i/<job_id>-<index>.<ext>
+# and the tools hand the client a markdown image link, so the picture renders in
+# the conversation body instead of only inside the collapsed tool-call block.
+# Leave it commented to inherit auth.oauth.issuer when OAuth is on; empty with no
+# issuer (stdio/local) means inline base64 only, nothing is hosted.
+# public_base_url   = "https://gptimage.specterpoint.com"
 # Defaults applied when a tool call omits the field.
 default_size        = "1024x1024"         # WxH (÷16, aspect 1:3..3:1, up to 2K) or "auto"
 # low keeps interactive generations fast (~15-30s). high looks best but a large
 # high render can take ~2 min and exceed a remote connector's tool-call timeout.
 default_quality     = "low"               # auto | low | medium | high
 default_background  = "auto"              # transparent | opaque | auto (transparent not always honored)
-default_format      = "png"               # png | jpeg | webp
+# webp, not png: an inline image round-trips as base64 and a full-res png
+# (1.5-3 MB) is large enough that claude.ai drops the tool result and nothing
+# renders. webp + compression keeps the payload light. Override to png per call
+# when you need lossless output.
+default_format      = "webp"              # png | jpeg | webp
+default_compression = 80                  # webp/jpeg quality 0-100 (higher = better/larger); ignored for png
 moderation          = "low"               # auto | low (low is permissive but still filtered)
 max_n               = 4                   # hard cap on images per call (cost guard)
 timeout_s           = 180                 # high quality / 2K can be slow
@@ -39,7 +51,11 @@ backoff_initial_ms  = 800
 # kept under any remote connector's tool-call timeout, so a fast render lands in
 # one call and a slow one is polled in safe chunks.
 job_poll_seconds    = 25
-job_ttl_seconds     = 900                 # keep a finished image fetchable 15 min
+# How long a finished render stays in the in-memory cache after it completes.
+# This is the window its hosted URL stays live, so it must outlast the client
+# fetching and rendering the link; then the render is dropped and nothing is
+# persisted. Pending jobs are never evicted.
+job_ttl_seconds     = 900
 max_concurrent_jobs = 4
 
 [mcp]

@@ -37,15 +37,48 @@ json image_result(const std::vector<GeneratedImage>& images, const std::string& 
     return {{"content", content}};
 }
 
-json render_job(const std::optional<ImageJob>& snap, const std::string& id) {
+namespace {
+
+// File extension advertised in a hosted image URL. Cosmetic (the route resolves
+// by job id and serves with the stored mime), but keeps the link honest.
+std::string ext_for_mime(const std::string& m) {
+    if (m == "image/webp") return "webp";
+    if (m == "image/jpeg") return "jpeg";
+    return "png";
+}
+
+}  // namespace
+
+json render_job(const std::optional<ImageJob>& snap, const std::string& id,
+                const std::string& public_base_url) {
     if (!snap) {
         return text_result(
-            "No image job with id '" + id + "' (it may have finished long ago and "
-            "expired, or the server restarted). Start a new generation.", true);
+            "No image job with id '" + id + "' — it was already delivered and "
+            "released, or it expired, or the server restarted. Start a new "
+            "generation.", true);
     }
     switch (snap->status) {
-        case ImageJob::Status::Done:
-            return image_result(snap->images, snap->caption);
+        case ImageJob::Status::Done: {
+            // Local/stdio (nothing hosted): the inline base64 block is all there is.
+            if (public_base_url.empty() || snap->images.empty()) {
+                return image_result(snap->images, snap->caption);
+            }
+            // Hosted: keep the (compact) inline block as a fallback, and add a text
+            // block whose markdown link makes the picture render in the
+            // conversation body. The caption rides along in that same block so the
+            // model does not see a bare image with no context.
+            json res = image_result(snap->images, /*caption=*/"");
+            std::string text =
+                "Show this image to the user by including the following markdown "
+                "in your reply verbatim:\n\n";
+            for (size_t i = 0; i < snap->images.size(); ++i) {
+                text += "![generated image](" + public_base_url + "/i/" + id + "-" +
+                        std::to_string(i) + "." + ext_for_mime(snap->images[i].mime) + ")\n";
+            }
+            if (!snap->caption.empty()) text += "\n" + snap->caption;
+            res["content"].push_back(json::object({{"type", "text"}, {"text", text}}));
+            return res;
+        }
         case ImageJob::Status::Error:
             return text_result("image job failed: " + snap->error, true);
         case ImageJob::Status::Pending:

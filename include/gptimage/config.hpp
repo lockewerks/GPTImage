@@ -36,11 +36,30 @@ struct ImageConfig {
     std::string generations_endpoint = "https://api.openai.com/v1/images/generations";
     std::string edits_endpoint       = "https://api.openai.com/v1/images/edits";
 
+    // Public origin the HTTP transport is reachable at, e.g.
+    // "https://gptimage.specterpoint.com" (no trailing slash). When set, a
+    // finished render is also served at <public_base_url>/i/<job_id>-<index>.<ext>
+    // and the tools hand the client a markdown image link, so the picture renders
+    // in the conversation body instead of only inside the collapsed tool-call
+    // block. Left empty it defaults to auth.oauth.issuer when OAuth is on; empty
+    // with no issuer ⇒ inline base64 only (the stdio/local path — nothing hosted).
+    std::string public_base_url;
+
     // Defaults applied when a tool call omits the field.
     std::string default_size       = "1024x1024";  // WxH (div by 16, 1:3..3:1) or "auto"
-    std::string default_quality    = "high";        // auto|low|medium|high
+    std::string default_quality    = "low";         // auto|low|medium|high
     std::string default_background = "auto";        // transparent|opaque|auto
-    std::string default_format     = "png";         // png|jpeg|webp
+    // webp, not png: an inline image round-trips as base64 in the tool result,
+    // and a full-res png (1.5-3 MB) is large enough that a remote connector
+    // (claude.ai) drops it and the picture never renders. webp+compression keeps
+    // the payload light so it lands inline every time. Override to png only when
+    // you need lossless output and can accept a large payload.
+    std::string default_format     = "webp";        // png|jpeg|webp
+    // Compression level for the lossy formats (webp/jpeg), 0-100; higher is
+    // better quality and a bigger payload. Ignored for png. -1 omits it (OpenAI
+    // then uses 100 = largest). 80 is visually near-lossless yet a fraction of a
+    // png's size.
+    int         default_compression = 80;
     std::string moderation         = "low";         // auto|low
 
     int max_n              = 4;    // hard cap on images per call (cost guard)
@@ -53,7 +72,12 @@ struct ImageConfig {
     // job_poll_seconds (kept well under a remote connector's tool-call timeout)
     // so a fast render returns in one call and a slow one is polled in chunks.
     int job_poll_seconds     = 25;
-    int job_ttl_seconds      = 900;  // keep a finished image fetchable this long
+    // How long a finished render is kept in the in-memory cache after it
+    // completes. This is the window its hosted URL stays live, so it must outlast
+    // the client fetching and rendering the link (seconds) with room for a reload;
+    // after it the render is dropped and nothing is persisted. Pending jobs are
+    // never evicted.
+    int job_ttl_seconds      = 900;
     int max_concurrent_jobs  = 4;
 
     // Resolved from environment at load time. Empty ⇒ the tools return an error

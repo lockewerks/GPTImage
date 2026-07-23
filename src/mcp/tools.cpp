@@ -29,14 +29,23 @@ json mcp_tool_schemas() {
             "asks for final/high quality and can wait. \"auto\" lets the model decide."},
     };
     const json format_prop = {
-        {"type", "string"}, {"enum", format_enum}, {"default", "png"},
+        {"type", "string"}, {"enum", format_enum}, {"default", "webp"},
         {"description",
-            "Output image format. png is lossless; jpeg/webp are smaller (use "
-            "with compression) which keeps the inline payload light."},
+            "Output image format. Defaults to webp: it is a fraction of a png's "
+            "size, so the picture is light enough to render inline instead of "
+            "being dropped for size. png is lossless but large; use it only when "
+            "you need that and can accept a heavier payload."},
     };
     const json n_prop = {
         {"type", "integer"}, {"default", 1}, {"minimum", 1}, {"maximum", 4},
         {"description", "How many images to generate (capped by the server)."},
+    };
+    const json compression_prop = {
+        {"type", "integer"}, {"minimum", 0}, {"maximum", 100},
+        {"description",
+            "Quality for the lossy formats webp/jpeg, 0-100 (higher is better and "
+            "larger). Ignored for png. Defaults to the server setting, which keeps "
+            "the picture light enough to render inline."},
     };
 
     return json::array({
@@ -52,7 +61,9 @@ json mcp_tool_schemas() {
                 "gptimage_result tool with that job_id to fetch the finished image, "
                 "and keep calling it until the image comes back. Use quality:\"low\" "
                 "for quick drafts and quality:\"high\" for finished work (high can "
-                "take 1-3 minutes and will come back via a job_id)."},
+                "take 1-3 minutes and will come back via a job_id). When the result "
+                "includes a markdown image link, show the picture to the user by "
+                "putting that link in your reply verbatim; it renders inline."},
             {"inputSchema", {
                 {"type", "object"},
                 {"properties", {
@@ -66,8 +77,7 @@ json mcp_tool_schemas() {
                                      {"description", "Background handling. transparent needs png/webp and is not always honored by the model; auto is safest."}}},
                     {"format",      format_prop},
                     {"n",           n_prop},
-                    {"compression", {{"type", "integer"}, {"minimum", 0}, {"maximum", 100},
-                                     {"description", "Compression level 0-100 for jpeg/webp only. Ignored for png."}}},
+                    {"compression", compression_prop},
                 }},
                 {"required", json::array({"prompt"})},
             }},
@@ -89,7 +99,9 @@ json mcp_tool_schemas() {
                 "be composited into one scene. Like gptimage_generate, a fast edit "
                 "returns the image inline, while a slower one returns a job_id with "
                 "status \"pending\" that you fetch with the gptimage_result tool. "
-                "Use this to iterate on a previous result."},
+                "Use this to iterate on a previous result. When the result includes "
+                "a markdown image link, show the picture to the user by putting that "
+                "link in your reply verbatim; it renders inline."},
             {"inputSchema", {
                 {"type", "object"},
                 {"properties", {
@@ -101,10 +113,11 @@ json mcp_tool_schemas() {
                                 {"description", "How to edit or combine the input image(s)."}}},
                     {"mask",   {{"type", "string"},
                                 {"description", "Optional base64 PNG mask; transparent pixels mark the area to edit. Must match the first image's size."}}},
-                    {"size",    size_prop},
-                    {"quality", quality_prop},
-                    {"format",  format_prop},
-                    {"n",       n_prop},
+                    {"size",        size_prop},
+                    {"quality",     quality_prop},
+                    {"format",      format_prop},
+                    {"n",           n_prop},
+                    {"compression", compression_prop},
                 }},
                 {"required", json::array({"images", "prompt"})},
             }},
@@ -125,7 +138,10 @@ json mcp_tool_schemas() {
                 "image is returned inline; if it is still working this reports "
                 "\"pending\" again, in which case call gptimage_result once more with "
                 "the same job_id. High-quality renders take 1-3 minutes, so several "
-                "polls are normal. This is the only way to retrieve a slow render."},
+                "polls are normal. This is the only way to retrieve a slow render. "
+                "When the result includes a markdown image link, show the picture to "
+                "the user by putting that link in your reply verbatim; it renders "
+                "inline."},
             {"inputSchema", {
                 {"type", "object"},
                 {"properties", {

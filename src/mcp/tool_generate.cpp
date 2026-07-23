@@ -30,7 +30,7 @@ json tool_generate(const json& args, ToolContext& ctx) {
     req.background  = args.value("background",  ic.default_background);
     req.format      = args.value("format",     ic.default_format);
     req.n           = args.value("n",           1);
-    req.compression = args.value("compression", -1);
+    req.compression = args.value("compression", ic.default_compression);
     if (req.n < 1) req.n = 1;
     if (req.n > ic.max_n) req.n = ic.max_n;
 
@@ -56,7 +56,7 @@ json tool_generate(const json& args, ToolContext& ctx) {
     // Give a fast render (low quality / small size) the chance to land inside
     // this one call; otherwise the caller polls gptimage_result with the id.
     auto snap = ctx.jobs.wait_for(id, std::chrono::seconds(ic.job_poll_seconds));
-    return render_job(snap, id);
+    return render_job(snap, id, ic.public_base_url);
 }
 
 }  // namespace gptimage

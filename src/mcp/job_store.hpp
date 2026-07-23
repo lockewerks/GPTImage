@@ -59,6 +59,11 @@ public:
     std::optional<ImageJob> wait_for(const std::string& id,
                                      std::chrono::milliseconds wait);
 
+    // Fetch one finished image for the HTTP image route. Returns the image at
+    // `index` of a Done job, or std::nullopt if the id is unknown/evicted, the
+    // job is not Done, or the index is out of range. Does not block.
+    std::optional<GeneratedImage> get_image(const std::string& id, size_t index);
+
 private:
     void evict_locked();  // drop expired finished jobs; caller holds mtx_
 
