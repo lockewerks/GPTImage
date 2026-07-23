@@ -173,8 +173,9 @@ ctest --test-dir build --output-on-failure
 ```
 
 The unit tests cover config parsing, the auth/grant model, JWT signing, the
-OAuth PKCE helpers, and password hashing. They do not call OpenAI, so they cost
-nothing and prove nothing about whether the pictures are any good.
+OAuth PKCE helpers, password hashing, and the async render cache (including the
+hosted-URL result shaping). They do not call OpenAI, so they cost nothing and
+prove nothing about whether the pictures are any good.
 
 ## License
 
